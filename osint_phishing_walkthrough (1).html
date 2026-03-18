@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OSINT Email Phishing Investigation Walkthrough</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&family=Bebas+Neue&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0b0e14;
+    --surface: #111520;
+    --surface2: #181d2e;
+    --border: #1e2640;
+    --accent: #00d4ff;
+    --accent2: #ff4757;
+    --accent3: #2ed573;
+    --accent4: #ffa502;
+    --text: #c8d6f0;
+    --text-dim: #6b7fa3;
+    --text-bright: #e8f0ff;
+    --t1: #2ed573;
+    --t2: #ffa502;
+    --t3: #ff4757;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+    --display: 'Bebas Neue', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.7;
+  }
+
+  /* ── HERO ── */
+  .hero {
+    background: linear-gradient(135deg, #0b0e14 0%, #0d1526 50%, #070b12 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 60px 48px 48px;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: -60px; right: -60px;
+    width: 400px; height: 400px;
+    background: radial-gradient(circle, rgba(0,212,255,0.06) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .hero-tag {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .hero-tag::before {
+    content: '';
+    display: inline-block;
+    width: 24px; height: 1px;
+    background: var(--accent);
+  }
+  .hero h1 {
+    font-family: var(--display);
+    font-size: clamp(36px, 5vw, 72px);
+    letter-spacing: 2px;
+    color: var(--text-bright);
+    line-height: 1.05;
+    margin-bottom: 16px;
+  }
+  .hero h1 span { color: var(--accent); }
+  .hero-sub {
+    color: var(--text-dim);
+    font-size: 14px;
+    max-width: 620px;
+    margin-bottom: 28px;
+  }
+  .badge-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .badge {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 4px 12px;
+    border-radius: 2px;
+    letter-spacing: 1px;
+  }
+  .badge-t1 { background: rgba(46,213,115,0.12); color: var(--t1); border: 1px solid rgba(46,213,115,0.3); }
+  .badge-t2 { background: rgba(255,165,2,0.12); color: var(--t2); border: 1px solid rgba(255,165,2,0.3); }
+  .badge-t3 { background: rgba(255,71,87,0.12); color: var(--t3); border: 1px solid rgba(255,71,87,0.3); }
+  .badge-neutral { background: rgba(0,212,255,0.08); color: var(--accent); border: 1px solid rgba(0,212,255,0.2); }
+
+  /* ── LAYOUT ── */
+  .container { max-width: 1060px; margin: 0 auto; padding: 0 32px; }
+
+  /* ── INTRO SECTION ── */
+  .intro-section {
+    padding: 48px 48px;
+    border-bottom: 1px solid var(--border);
+  }
+  .intro-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-top: 28px;
+  }
+  .info-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 20px 24px;
+  }
+  .info-box h4 {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .info-box p { color: var(--text-dim); font-size: 13.5px; }
+
+  /* ── SECTION HEADER ── */
+  .section-header {
+    padding: 40px 48px 0;
+  }
+  .tier-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .tier-num {
+    font-family: var(--display);
+    font-size: 48px;
+    line-height: 1;
+  }
+  .tier-num.t1 { color: var(--t1); }
+  .tier-num.t2 { color: var(--t2); }
+  .tier-num.t3 { color: var(--t3); }
+  .tier-title-block h2 {
+    font-family: var(--display);
+    font-size: 28px;
+    letter-spacing: 2px;
+    color: var(--text-bright);
+  }
+  .tier-title-block p {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+    margin-top: 2px;
+  }
+  .section-intro {
+    padding: 16px 48px 32px;
+    color: var(--text-dim);
+    font-size: 14px;
+    max-width: 820px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0;
+    margin-bottom: 0;
+  }
+
+  /* ── TOOL CARD ── */
+  .tool-section {
+    padding: 36px 48px;
+    border-bottom: 1px solid var(--border);
+  }
+  .tool-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+  .tool-name-block h3 {
+    font-family: var(--display);
+    font-size: 26px;
+    letter-spacing: 1px;
+    color: var(--text-bright);
+  }
+  .tool-url {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    margin-top: 4px;
+    text-decoration: none;
+    border-bottom: 1px dashed rgba(0,212,255,0.3);
+    padding-bottom: 1px;
+  }
+  .tool-url:hover { color: #fff; }
+  .tool-meta {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    margin-top: 6px;
+  }
+
+  .tool-desc {
+    font-size: 14px;
+    color: var(--text);
+    margin-bottom: 20px;
+    max-width: 740px;
+  }
+
+  /* ── STEPS ── */
+  .steps { margin-bottom: 24px; }
+  .step {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 14px;
+    align-items: flex-start;
+  }
+  .step-num {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    background: rgba(0,212,255,0.08);
+    border: 1px solid rgba(0,212,255,0.2);
+    border-radius: 2px;
+    width: 28px; height: 22px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .step p { font-size: 13.5px; color: var(--text); }
+  .step code {
+    font-family: var(--mono);
+    font-size: 12px;
+    background: rgba(0,212,255,0.08);
+    color: var(--accent);
+    padding: 1px 6px;
+    border-radius: 2px;
+  }
+
+  /* ── MOCK SCREENSHOT ── */
+  .mock-screen {
+    background: #0d1117;
+    border: 1px solid #2a3040;
+    border-radius: 6px;
+    overflow: hidden;
+    margin: 20px 0;
+    font-family: var(--mono);
+  }
+  .mock-bar {
+    background: #161b22;
+    border-bottom: 1px solid #2a3040;
+    padding: 8px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .mock-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .mock-dot.r { background: #ff5f57; }
+  .mock-dot.y { background: #febc2e; }
+  .mock-dot.g { background: #28c840; }
+  .mock-url {
+    flex: 1;
+    background: #0d1117;
+    border: 1px solid #2a3040;
+    border-radius: 3px;
+    padding: 3px 10px;
+    font-size: 11px;
+    color: #8b949e;
+    margin: 0 8px;
+  }
+  .mock-body { padding: 16px 20px; }
+
+  /* MXToolbox style */
+  .mxt-header { background: #1a2035; padding: 12px 16px; border-bottom: 1px solid #2a3040; }
+  .mxt-logo { font-size: 13px; font-weight: 700; color: #4a9eff; letter-spacing: 0; font-family: var(--sans); }
+  .mxt-input-row { display: flex; gap: 8px; margin: 12px 0; }
+  .mxt-input { background: #0d1117; border: 1px solid #3a4060; border-radius: 3px; padding: 6px 12px; font-family: var(--mono); font-size: 12px; color: #8b949e; flex: 1; }
+  .mxt-btn { background: #4a9eff; color: #fff; border: none; border-radius: 3px; padding: 6px 16px; font-size: 12px; font-family: var(--sans); cursor: pointer; }
+  .mxt-result-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #1e2640; font-size: 12px; }
+  .mxt-icon { width: 16px; height: 16px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; flex-shrink: 0; }
+  .mxt-icon.ok { background: #2ed573; color: #000; }
+  .mxt-icon.warn { background: #ffa502; color: #000; }
+  .mxt-icon.fail { background: #ff4757; color: #fff; }
+  .mxt-label { color: #8b949e; width: 100px; }
+  .mxt-val { color: #c8d6f0; }
+  .mxt-status { margin-left: auto; font-size: 10px; padding: 2px 8px; border-radius: 2px; }
+  .mxt-status.pass { background: rgba(46,213,115,0.15); color: #2ed573; }
+  .mxt-status.fail { background: rgba(255,71,87,0.15); color: #ff4757; }
+  .mxt-status.warn { background: rgba(255,165,2,0.15); color: #ffa502; }
+
+  /* Header analysis box */
+  .header-box { font-size: 11px; color: #6b7fa3; line-height: 1.9; }
+  .header-line { display: flex; gap: 8px; }
+  .hk { color: var(--accent); width: 130px; flex-shrink: 0; }
+  .hv { color: #c8d6f0; }
+  .hv.warn { color: var(--t2); }
+  .hv.good { color: var(--t1); }
+  .hv.bad  { color: var(--t3); }
+
+  /* VirusTotal style */
+  .vt-score-row { display: flex; align-items: center; gap: 16px; margin: 12px 0; }
+  .vt-gauge { width: 60px; height: 60px; border-radius: 50%; border: 3px solid #ff4757; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; color: #ff4757; font-family: var(--sans); }
+  .vt-gauge.clean { border-color: var(--t1); color: var(--t1); }
+  .vt-info { font-size: 13px; }
+  .vt-info strong { color: var(--text-bright); font-size: 15px; }
+  .vt-info .sub { color: #6b7fa3; font-size: 11px; font-family: var(--mono); }
+  .vt-tabs { display: flex; gap: 0; border-bottom: 1px solid #2a3040; margin-bottom: 12px; }
+  .vt-tab { padding: 6px 14px; font-size: 11px; color: #6b7fa3; cursor: pointer; border-bottom: 2px solid transparent; }
+  .vt-tab.active { color: #4a9eff; border-bottom-color: #4a9eff; }
+  .vt-engine-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-bottom: 1px solid #1a2035; font-size: 11px; }
+  .vt-engine-name { color: #8b949e; }
+  .vt-detect { color: var(--t3); font-weight: 600; }
+  .vt-clean { color: var(--t1); }
+  .vt-undetected { color: #444c5f; }
+
+  /* Maltego style */
+  .maltego-canvas { background: #0a0e18; border: 1px solid #1e2640; border-radius: 4px; position: relative; height: 240px; overflow: hidden; }
+  .m-node {
+    position: absolute;
+    background: #161d30;
+    border: 1px solid #2a3a5c;
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-size: 10px;
+    color: #8b9ab8;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+  .m-node.center { border-color: var(--accent); color: var(--accent); background: rgba(0,212,255,0.08); }
+  .m-node.danger { border-color: var(--t3); color: var(--t3); background: rgba(255,71,87,0.08); }
+  .m-node.warn { border-color: var(--t2); color: var(--t2); background: rgba(255,165,2,0.08); }
+  .m-node.ok { border-color: var(--t1); color: var(--t1); background: rgba(46,213,115,0.08); }
+  .m-node .icon { font-size: 14px; }
+  .m-line {
+    position: absolute;
+    background: #2a3a5c;
+    height: 1px;
+    transform-origin: left center;
+  }
+  .m-line.red { background: rgba(255,71,87,0.5); }
+  .m-line.green { background: rgba(46,213,115,0.4); }
+  .m-line.amber { background: rgba(255,165,2,0.4); }
+  .maltego-legend { display: flex; gap: 16px; margin-top: 10px; flex-wrap: wrap; }
+  .m-leg { font-size: 11px; color: #6b7fa3; display: flex; align-items: center; gap: 6px; }
+  .m-leg-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  /* Escalation box */
+  .escalate-box {
+    background: linear-gradient(135deg, rgba(255,71,87,0.06) 0%, rgba(255,71,87,0.02) 100%);
+    border: 1px solid rgba(255,71,87,0.25);
+    border-left: 3px solid var(--t3);
+    border-radius: 4px;
+    padding: 16px 20px;
+    margin-top: 20px;
+  }
+  .escalate-box h5 {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--t3);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .escalate-box p { font-size: 13px; color: var(--text); }
+
+  /* IOC Table */
+  .ioc-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 12px; }
+  .ioc-table th { text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 1px; color: var(--text-dim); padding: 6px 12px; border-bottom: 1px solid var(--border); text-transform: uppercase; }
+  .ioc-table td { padding: 7px 12px; border-bottom: 1px solid #141927; color: var(--text); vertical-align: top; }
+  .ioc-table tr:hover td { background: rgba(255,255,255,0.02); }
+  .ioc-table .mono { font-family: var(--mono); color: var(--accent); font-size: 11px; }
+  .ioc-risk { padding: 2px 8px; border-radius: 2px; font-family: var(--mono); font-size: 10px; }
+  .ioc-risk.h { background: rgba(255,71,87,0.15); color: var(--t3); }
+  .ioc-risk.m { background: rgba(255,165,2,0.15); color: var(--t2); }
+  .ioc-risk.l { background: rgba(46,213,115,0.15); color: var(--t1); }
+
+  /* Tier divider */
+  .tier-divider {
+    height: 4px;
+    margin: 0;
+  }
+  .tier-divider.t1 { background: linear-gradient(90deg, var(--t1), transparent); }
+  .tier-divider.t2 { background: linear-gradient(90deg, var(--t2), transparent); }
+  .tier-divider.t3 { background: linear-gradient(90deg, var(--t3), transparent); }
+
+  /* Glossary */
+  .glossary-section {
+    padding: 40px 48px;
+    border-bottom: 1px solid var(--border);
+  }
+  .gloss-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin-top: 20px; }
+  .gloss-item { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 14px 16px; }
+  .gloss-term { font-family: var(--mono); font-size: 11px; color: var(--accent); margin-bottom: 4px; }
+  .gloss-def { font-size: 12.5px; color: var(--text-dim); }
+
+  /* Footer */
+  .footer {
+    padding: 32px 48px;
+    color: var(--text-dim);
+    font-family: var(--mono);
+    font-size: 11px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  /* Section sub-head */
+  .sub-head {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  h2.section-title {
+    font-family: var(--display);
+    font-size: 22px;
+    letter-spacing: 1px;
+    color: var(--text-bright);
+    margin-bottom: 12px;
+  }
+
+  .tip-box {
+    background: rgba(0,212,255,0.05);
+    border: 1px solid rgba(0,212,255,0.15);
+    border-left: 3px solid var(--accent);
+    border-radius: 4px;
+    padding: 14px 18px;
+    margin: 16px 0;
+    font-size: 13px;
+    color: var(--text);
+  }
+  .tip-box strong { color: var(--accent); font-family: var(--mono); font-size: 11px; letter-spacing: 1px; text-transform: uppercase; display: block; margin-bottom: 4px; }
+
+  @media (max-width: 700px) {
+    .hero, .intro-section, .section-header, .tool-section, .glossary-section, .footer { padding-left: 20px; padding-right: 20px; }
+    .intro-grid { grid-template-columns: 1fr; }
+    .tool-header { flex-direction: column; }
+    .section-intro { padding-left: 20px; padding-right: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════ HERO ═══════════════════════════════ -->
+<div class="hero">
+  <div class="hero-tag">OSINT Intelligence Walkthrough · Tier 1 → 3</div>
+  <h1>Investigating <span>Email Phishing</span><br>Campaigns with Free OSINT Tools</h1>
+  <p class="hero-sub">A practical, tiered guide for identifying, analyzing, and escalating suspicious email threats using open-source intelligence resources — from basic header checks to full campaign mapping.</p>
+  <div class="badge-row">
+    <span class="badge badge-t1">TIER 1 · TRIAGE</span>
+    <span class="badge badge-t2">TIER 2 · ANALYSIS</span>
+    <span class="badge badge-t3">TIER 3 · THREAT INTELLIGENCE</span>
+    <span class="badge badge-neutral">FREE TOOLS ONLY</span>
+  </div>
+  <div style="margin-top:24px;display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div style="width:32px;height:32px;border-radius:50%;background:rgba(0,212,255,0.12);border:1px solid rgba(0,212,255,0.3);display:flex;align-items:center;justify-content:center;font-size:14px;">👤</div>
+      <div>
+        <div style="font-family:var(--mono);font-size:10px;letter-spacing:2px;color:var(--text-dim);text-transform:uppercase;margin-bottom:2px;">Author</div>
+        <div style="font-family:var(--sans);font-size:14px;font-weight:600;color:var(--text-bright);">Andres Rafael Maldonado</div>
+      </div>
+    </div>
+    <div style="width:1px;height:32px;background:var(--border);"></div>
+    <div>
+      <div style="font-family:var(--mono);font-size:10px;letter-spacing:2px;color:var(--text-dim);text-transform:uppercase;margin-bottom:2px;">Published</div>
+      <div style="font-family:var(--mono);font-size:13px;color:var(--accent);">March 18, 2026</div>
+    </div>
+    <div style="width:1px;height:32px;background:var(--border);"></div>
+    <div>
+      <div style="font-family:var(--mono);font-size:10px;letter-spacing:2px;color:var(--text-dim);text-transform:uppercase;margin-bottom:2px;">LinkedIn</div>
+      <a href="https://linkedin.com/in/boricua" target="_blank" style="font-family:var(--mono);font-size:13px;color:var(--accent);text-decoration:none;border-bottom:1px dashed rgba(0,212,255,0.3);padding-bottom:1px;">linkedin.com/in/boricua</a>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ INTRO ═══════════════════════════════ -->
+<div class="intro-section" style="max-width:1060px;margin:0 auto;">
+  <p class="sub-head">Before You Begin</p>
+  <h2 class="section-title">What is a Phishing Campaign Investigation?</h2>
+  <p style="color:var(--text);font-size:14px;max-width:780px;">
+    When a suspicious email lands in an inbox — whether it's a spoofed sender, a malicious link, or an unusual attachment — someone needs to determine if it's a real threat. This walkthrough gives you a <strong style="color:var(--text-bright)">repeatable, tiered process</strong> using free OSINT (Open Source Intelligence) tools to go from first look to full threat attribution. Each tier builds on the last, and each tool has a clear "when to escalate" trigger.
+  </p>
+  <div class="intro-grid">
+    <div class="info-box">
+      <h4>🎯 Who This Is For</h4>
+      <p>SOC analysts, IT administrators, help desk staff, and security-curious professionals who need to triage phishing reports efficiently without paid tooling.</p>
+    </div>
+    <div class="info-box">
+      <h4>⚠️ Key Terminology</h4>
+      <p><strong style="color:var(--text-bright)">IOC</strong> — Indicator of Compromise. Any artifact (IP, domain, hash) that signals malicious activity.<br>
+      <strong style="color:var(--text-bright)">TTP</strong> — Tactics, Techniques & Procedures. The "how" of an attacker.<br>
+      <strong style="color:var(--text-bright)">Spoofing</strong> — Faking a sender identity to deceive recipients.</p>
+    </div>
+    <div class="info-box">
+      <h4>📋 What You'll Need</h4>
+      <p>The raw email headers (copy from your email client), the sender's domain and/or IP address, any URLs or attachments included in the suspicious message.</p>
+    </div>
+    <div class="info-box">
+      <h4>🔴 Safety First</h4>
+      <p>Never click links directly from suspicious emails. Copy URLs by right-clicking. Never open attachments — hash them first. Use a sandboxed browser or VM when possible.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ TIER 1 ═══════════════════ -->
+<div class="tier-divider t1"></div>
+<div class="section-header" style="max-width:1060px;margin:0 auto;">
+  <div class="tier-label">
+    <div class="tier-num t1">01</div>
+    <div class="tier-title-block">
+      <h2>TIER 1 — TRIAGE &amp; SURFACE ANALYSIS</h2>
+      <p>INITIAL ASSESSMENT · PERFORMED BY L1 SOC ANALYST OR HELP DESK</p>
+    </div>
+  </div>
+</div>
+<p class="section-intro" style="padding:12px 48px 24px;max-width:1060px;margin:0 auto;color:var(--text-dim);font-size:14px;">
+  Tier 1 is your first line of defense. The goal here is rapid triage: determine in under 10 minutes whether a reported email is suspicious or benign, and flag the key IOCs for deeper review. These tools require no installation and no accounts (for basic use).
+</p>
+
+<!-- ── TOOL: Email Header Analyzer ── -->
+<div class="tool-section" style="max-width:1060px;margin:0 auto;">
+  <div class="tool-header">
+    <div class="tool-name-block">
+      <h3>📧 Google Admin Toolbox — Email Header Analyzer</h3>
+      <a class="tool-url" href="https://toolbox.googleapps.com/apps/messageheader/" target="_blank">toolbox.googleapps.com/apps/messageheader</a>
+      <div class="tool-meta">
+        <span class="badge badge-t1">TIER 1</span>
+        <span class="badge badge-neutral">NO ACCOUNT NEEDED</span>
+      </div>
+    </div>
+  </div>
+  <p class="tool-desc">
+    Every email carries invisible metadata called <strong>email headers</strong> — a chain of server hops, timestamps, and authentication results that tell the real story of how a message got to you. The Google Admin Toolbox parses these headers visually, surfacing authentication failures and suspicious routing in seconds. Think of it as the email's "flight record."
+  </p>
+
+  <div class="steps">
+    <div class="step"><div class="step-num">1</div><p>In your email client (Gmail, Outlook, etc.), open the suspicious email and access <code>Show Original</code> or <code>View Raw Headers</code>. Copy the entire header block.</p></div>
+    <div class="step"><div class="step-num">2</div><p>Navigate to the tool URL, paste the header text into the input field, and click <code>Analyze the header above</code>.</p></div>
+    <div class="step"><div class="step-num">3</div><p>Review the delivery chain. Look for: <code>SPF: FAIL</code>, <code>DKIM: FAIL</code>, <code>DMARC: FAIL</code> — any failure is a red flag indicating the sender domain may be spoofed.</p></div>
+    <div class="step"><div class="step-num">4</div><p>Note the originating IP address from the <code>Received: from</code> field — copy this for MXToolbox investigation in the next step.</p></div>
+  </div>
+
+  <!-- Mock screenshot: Header Analyzer -->
+  <div class="mock-screen">
+    <div class="mock-bar">
+      <div class="mock-dot r"></div><div class="mock-dot y"></div><div class="mock-dot g"></div>
+      <div class="mock-url">toolbox.googleapps.com/apps/messageheader/</div>
+    </div>
+    <div class="mock-body">
+      <div style="color:#4a9eff;font-family:var(--sans);font-size:13px;font-weight:600;margin-bottom:10px;">Google Admin Toolbox — Messageheader</div>
+      <div class="header-box">
+        <div class="header-line"><span class="hk">Delivered-To:</span><span class="hv">victim@targetcorp.com</span></div>
+        <div class="header-line"><span class="hk">Received:</span><span class="hv warn">from mail.susp-relay.ru (185.220.101.47)</span></div>
+        <div class="header-line"><span class="hk">From:</span><span class="hv warn">support@paypa1-secure.com</span></div>
+        <div class="header-line"><span class="hk">SPF Result:</span><span class="hv bad">❌ FAIL — sender not permitted</span></div>
+        <div class="header-line"><span class="hk">DKIM Result:</span><span class="hv bad">❌ FAIL — signature invalid</span></div>
+        <div class="header-line"><span class="hk">DMARC Result:</span><span class="hv bad">❌ FAIL — policy: reject</span></div>
+        <div class="header-line"><span class="hk">Return-Path:</span><span class="hv warn">bounces@different-domain.net</span></div>
+        <div class="header-line"><span class="hk">X-Originating-IP:</span><span class="hv warn">185.220.101.47</span></div>
+        <div class="header-line"><span class="hk">Delay:</span><span class="hv good">4 seconds total delivery</span></div>
+      </div>
+      <div style="margin-top:10px;font-size:11px;color:var(--t3);font-family:var(--mono);">⚠ 3 authentication failures detected — high likelihood of spoofing</div>
+    </div>
+  </div>
+
+  <div class="tip-box">
+    <strong>💡 Analyst Note</strong>
+    SPF, DKIM, and DMARC are three authentication protocols that verify a sender's identity. If all three fail together, the email is almost certainly spoofed. A mismatched <em>Return-Path</em> domain (different from the From address) is another classic spoofing indicator.
+  </div>
+
+  <div class="escalate-box">
+    <h5>⬆ When to Escalate to Tier 2</h5>
+    <p>Escalate if: (1) SPF/DKIM/DMARC all fail, (2) the originating IP is in a foreign/unexpected country, (3) the Return-Path differs from the From address, or (4) multiple users reported the same email. Document the originating IP and sender domain before escalating.</p>
+  </div>
+</div>
+
+<!-- ── TOOL: MXToolbox ── -->
+<div class="tool-section" style="max-width:1060px;margin:0 auto;">
+  <div class="tool-header">
+    <div class="tool-name-block">
+      <h3>🔍 MXToolbox — DNS &amp; Blacklist Lookup</h3>
+      <a class="tool-url" href="https://mxtoolbox.com" target="_blank">mxtoolbox.com</a>
+      <div class="tool-meta">
+        <span class="badge badge-t1">TIER 1</span>
+        <span class="badge badge-neutral">FREE TIER AVAILABLE</span>
+      </div>
+    </div>
+  </div>
+  <p class="tool-desc">
+    MXToolbox is a Swiss Army knife for DNS and email infrastructure analysis. It lets you look up MX records (which servers handle email for a domain), check if an IP or domain is on any known blacklists, verify SPF/DMARC records, and perform WHOIS lookups — all from a single interface. If an IP from the header analysis is blacklisted, that's your first hard IOC.
+  </p>
+
+  <div class="steps">
+    <div class="step"><div class="step-num">1</div><p>Go to <code>mxtoolbox.com</code> and paste the sender's domain (e.g., <code>paypa1-secure.com</code>) into the search bar. Run a <code>MX Lookup</code> first to see if mail servers exist at all — fake domains often have none.</p></div>
+    <div class="step"><div class="step-num">2</div><p>Run a <code>Blacklist Check</code> on the originating IP address from the headers. MXToolbox checks against 100+ real-time blacklists simultaneously.</p></div>
+    <div class="step"><div class="step-num">3</div><p>Use <code>SPF Record Lookup</code> and <code>DMARC Lookup</code> to verify whether the domain even has these policies configured. No DMARC record means the domain owner has no enforcement in place — attackers exploit this.</p></div>
+    <div class="step"><div class="step-num">4</div><p>Run a <code>WHOIS</code> lookup on the domain. Note the registration date — domains registered within the last 30 days are a major red flag (known as "young domains").</p></div>
+  </div>
+
+  <!-- Mock screenshot: MXToolbox -->
+  <div class="mock-screen">
+    <div class="mock-bar">
+      <div class="mock-dot r"></div><div class="mock-dot y"></div><div class="mock-dot g"></div>
+      <div class="mock-url">mxtoolbox.com/SuperTool.aspx</div>
+    </div>
+    <div class="mock-body">
+      <div class="mxt-header"><div class="mxt-logo">MxToolbox SuperTool</div></div>
+      <div class="mxt-input-row">
+        <div class="mxt-input">185.220.101.47</div>
+        <div class="mxt-btn" style="background:#e55;">Blacklist Check</div>
+      </div>
+      <div style="font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-bottom:10px;">Checking 100+ blacklists for 185.220.101.47...</div>
+      <div class="mxt-result-row"><div class="mxt-icon fail">✗</div><div class="mxt-label">Spamhaus ZEN</div><div class="mxt-val">185.220.101.47 listed</div><div class="mxt-status fail">BLACKLISTED</div></div>
+      <div class="mxt-result-row"><div class="mxt-icon fail">✗</div><div class="mxt-label">SORBS DUHL</div><div class="mxt-val">Dynamic IP flagged</div><div class="mxt-status fail">BLACKLISTED</div></div>
+      <div class="mxt-result-row"><div class="mxt-icon fail">✗</div><div class="mxt-label">Barracuda</div><div class="mxt-val">Reputation: Poor</div><div class="mxt-status fail">BLACKLISTED</div></div>
+      <div class="mxt-result-row"><div class="mxt-icon warn">!</div><div class="mxt-label">UCEPROTECT</div><div class="mxt-val">Subnet listed</div><div class="mxt-status warn">WARNING</div></div>
+      <div class="mxt-result-row"><div class="mxt-icon ok">✓</div><div class="mxt-label">PSBL</div><div class="mxt-val">Not listed</div><div class="mxt-status pass">PASS</div></div>
+      <div style="margin-top:10px;font-size:10px;font-family:var(--mono);color:var(--t3);">3/100 blacklists hit — IP has active malicious reputation</div>
+    </div>
+  </div>
+
+  <div class="tip-box">
+    <strong>💡 Analyst Note</strong>
+    A single blacklist hit can be a false positive. Three or more hits — especially on major lists like Spamhaus — is a strong indicator of a known malicious sender. Combine this with the header failures from Step 1 and you have a compelling case.
+  </div>
+
+  <div class="escalate-box">
+    <h5>⬆ When to Escalate to Tier 2</h5>
+    <p>Escalate if: (1) IP hits 2+ major blacklists, (2) the sender domain was registered within the last 30 days, (3) no legitimate MX records exist for the claimed organization's domain, or (4) WHOIS privacy is concealing the registrant and the domain mimics a known brand (typosquatting). Proceed to VirusTotal for URL and attachment analysis.</p>
+  </div>
+</div>
+
+<!-- ═══════════════════ TIER 2 ═══════════════════ -->
+<div class="tier-divider t2"></div>
+<div class="section-header" style="max-width:1060px;margin:0 auto;padding-top:40px;">
+  <div class="tier-label">
+    <div class="tier-num t2">02</div>
+    <div class="tier-title-block">
+      <h2>TIER 2 — DEEP LINK &amp; PAYLOAD ANALYSIS</h2>
+      <p>ARTIFACT EXAMINATION · PERFORMED BY L2 SOC ANALYST</p>
+    </div>
+  </div>
+</div>
+<p class="section-intro" style="padding:12px 48px 24px;max-width:1060px;margin:0 auto;color:var(--text-dim);font-size:14px;">
+  Tier 2 moves beyond metadata into the actual payloads: the URLs embedded in the email and any attached files. At this level you're confirming malicious intent and gathering IOCs for blocking and reporting. This is where most SOC investigations either close (block + report) or escalate further.
+</p>
+
+<!-- ── TOOL: VirusTotal ── -->
+<div class="tool-section" style="max-width:1060px;margin:0 auto;">
+  <div class="tool-header">
+    <div class="tool-name-block">
+      <h3>🛡 VirusTotal — URL, File &amp; Hash Scanner</h3>
+      <a class="tool-url" href="https://www.virustotal.com" target="_blank">virustotal.com</a>
+      <div class="tool-meta">
+        <span class="badge badge-t2">TIER 2</span>
+        <span class="badge badge-neutral">FREE · ACCOUNT OPTIONAL</span>
+      </div>
+    </div>
+  </div>
+  <p class="tool-desc">
+    VirusTotal aggregates 70+ antivirus engines and threat intelligence feeds into a single scan. You can submit a URL, a file, or an MD5/SHA256 hash and receive a verdict from the entire security industry at once. Crucially, <strong>do not click links</strong> — paste the URL directly into VirusTotal. For attachments, generate a hash first using a tool like <code>CertUtil</code> (Windows) or <code>sha256sum</code> (Linux/Mac) and submit the hash only.
+  </p>
+
+  <div class="steps">
+    <div class="step"><div class="step-num">1</div><p>Right-click any link in the suspicious email and copy the URL without clicking it. Navigate to <code>virustotal.com</code> and paste it into the URL tab.</p></div>
+    <div class="step"><div class="step-num">2</div><p>For attachments: on Windows, open Command Prompt and run <code>certutil -hashfile attachment.pdf SHA256</code> to generate a hash. Submit only the hash string to VirusTotal — never upload sensitive files.</p></div>
+    <div class="step"><div class="step-num">3</div><p>Review the Detection tab. Any detection count above <code>3/72</code> is worth acting on. Look at the <code>Community Score</code> and the <code>Relations</code> tab for connected domains and IPs.</p></div>
+    <div class="step"><div class="step-num">4</div><p>Check the <code>Details</code> tab for the URL's HTTP response, final redirect destination, and any dropped files. Phishing pages often redirect multiple times before landing.</p></div>
+  </div>
+
+  <!-- Mock screenshot: VirusTotal URL -->
+  <div class="mock-screen">
+    <div class="mock-bar">
+      <div class="mock-dot r"></div><div class="mock-dot y"></div><div class="mock-dot g"></div>
+      <div class="mock-url">virustotal.com/gui/url/</div>
+    </div>
+    <div class="mock-body">
+      <div class="vt-tabs">
+        <div class="vt-tab active">Detection</div>
+        <div class="vt-tab">Details</div>
+        <div class="vt-tab">Relations</div>
+        <div class="vt-tab">Community</div>
+      </div>
+      <div class="vt-score-row">
+        <div class="vt-gauge">14<br><span style="font-size:9px;">/ 72</span></div>
+        <div class="vt-info">
+          <strong>hxxps://paypa1-secure[.]com/login</strong>
+          <div class="sub" style="margin-top:4px;">URL · Scanned 2 minutes ago</div>
+          <div style="margin-top:6px;font-size:11px;color:var(--t3);">14 security vendors flagged this URL as <strong>Phishing</strong></div>
+        </div>
+      </div>
+      <div class="vt-engine-row"><div class="vt-engine-name">Kaspersky</div><div class="vt-detect">Phishing</div></div>
+      <div class="vt-engine-row"><div class="vt-engine-name">Bitdefender</div><div class="vt-detect">Phishing.Generic</div></div>
+      <div class="vt-engine-row"><div class="vt-engine-name">Avast</div><div class="vt-detect">Phish.PayPal.C</div></div>
+      <div class="vt-engine-row"><div class="vt-engine-name">ESET</div><div class="vt-detect">URL/Phishing.Gen</div></div>
+      <div class="vt-engine-row"><div class="vt-engine-name">Sophos</div><div class="vt-clean">Clean</div></div>
+      <div class="vt-engine-row"><div class="vt-engine-name">McAfee</div><div class="vt-undetected">Undetected</div></div>
+      <div style="margin-top:8px;font-size:10px;color:var(--text-dim);font-family:var(--mono);">Final redirect → 185.220.101.47/steal.php · Dropped cookies observed</div>
+    </div>
+  </div>
+
+  <!-- Mock screenshot: VirusTotal Hash -->
+  <div class="mock-screen" style="margin-top:16px;">
+    <div class="mock-bar">
+      <div class="mock-dot r"></div><div class="mock-dot y"></div><div class="mock-dot g"></div>
+      <div class="mock-url">virustotal.com/gui/file/</div>
+    </div>
+    <div class="mock-body">
+      <div class="vt-tabs">
+        <div class="vt-tab active">Detection</div>
+        <div class="vt-tab">Behavior</div>
+        <div class="vt-tab">Relations</div>
+      </div>
+      <div class="vt-score-row">
+        <div class="vt-gauge">0<br><span style="font-size:9px;">/ 72</span></div>
+        <div class="vt-info">
+          <strong>invoice_march2026.pdf</strong>
+          <div class="sub" style="color:var(--t1);margin-top:4px;">SHA256: a3f8c1d...92ee4b · No threats detected</div>
+          <div style="margin-top:6px;font-size:11px;color:var(--t1);">✓ File appears clean across all 72 engines</div>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--text-dim);font-family:var(--mono);margin-top:6px;">File type: PDF · Size: 284KB · First seen: 2026-03-15</div>
+    </div>
+  </div>
+
+  <div class="tip-box">
+    <strong>💡 Analyst Note</strong>
+    A "0/72" result doesn't always mean safe — brand-new malware may not yet be in any engine's database (this is called a "zero-day" or "low prevalence" sample). Always cross-reference the submission date. If the file was first seen minutes ago and arrived in a suspicious email, treat it as suspect regardless of the score.
+  </div>
+
+  <div class="escalate-box">
+    <h5>⬆ When to Escalate to Tier 3</h5>
+    <p>Escalate if: (1) URL scores 5+ detections with "Phishing" or "Trojan" labels, (2) the Relations tab shows connections to known C2 (command-and-control) infrastructure, (3) a file hash has behavioral detections even with low AV scores, or (4) the attack appears targeted (spear-phishing) against a specific person or role in the organization. At this point, pattern analysis and threat actor attribution become necessary.</p>
+  </div>
+</div>
+
+<!-- ── TOOL: URLScan.io ── -->
+<div class="tool-section" style="max-width:1060px;margin:0 auto;">
+  <div class="tool-header">
+    <div class="tool-name-block">
+      <h3>🌐 URLScan.io — Live URL &amp; Page Inspector</h3>
+      <a class="tool-url" href="https://urlscan.io" target="_blank">urlscan.io</a>
+      <div class="tool-meta">
+        <span class="badge badge-t2">TIER 2</span>
+        <span class="badge badge-neutral">FREE · ACCOUNT OPTIONAL</span>
+      </div>
+    </div>
+  </div>
+  <p class="tool-desc">
+    URLScan.io safely "visits" a URL in an isolated browser sandbox and captures a screenshot, the full DOM, network requests, redirects, and all resources loaded — without you ever touching the page. This is invaluable for analyzing credential-harvesting pages, fake login portals, and drive-by download sites while keeping your machine completely safe.
+  </p>
+
+  <div class="steps">
+    <div class="step"><div class="step-num">1</div><p>Paste the suspicious URL into <code>urlscan.io</code> and submit a public scan. Scans are typically complete in 20–30 seconds.</p></div>
+    <div class="step"><div class="step-num">2</div><p>Review the <strong>Screenshot</strong> tab — you'll see exactly what a victim would see. Fake login pages for PayPal, Microsoft, or banks are visually obvious here.</p></div>
+    <div class="step"><div class="step-num">3</div><p>Check the <strong>HTTP</strong> tab for redirect chains. A phishing URL often redirects through 3–5 hops to avoid detection. Each hop is a potential IOC.</p></div>
+    <div class="step"><div class="step-num">4</div><p>Use the <strong>DOM</strong> tab to look for form action URLs — where are stolen credentials being sent? This is often a different server than the page itself.</p></div>
+  </div>
+
+  <!-- Mock screenshot: URLScan -->
+  <div class="mock-screen">
+    <div class="mock-bar">
+      <div class="mock-dot r"></div><div class="mock-dot y"></div><div class="mock-dot g"></div>
+      <div class="mock-url">urlscan.io/result/a1b2c3d4-e5f6-7890-abcd-ef1234567890/</div>
+    </div>
+    <div class="mock-body" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <div>
+        <div style="font-size:10px;font-family:var(--mono);color:var(--text-dim);margin-bottom:6px;">SCREENSHOT CAPTURE</div>
+        <div style="background:#1a2035;border:1px solid #2a3a5c;border-radius:3px;height:100px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:6px;">
+          <div style="font-family:var(--sans);font-size:11px;color:#4a9eff;font-weight:700;">🔒 PayPal — Verify Your Account</div>
+          <div style="width:80%;height:18px;background:#0d1117;border:1px solid #3a4060;border-radius:2px;"></div>
+          <div style="width:80%;height:18px;background:#0d1117;border:1px solid #3a4060;border-radius:2px;"></div>
+          <div style="width:50%;height:20px;background:#4a9eff;border-radius:2px;"></div>
+          <div style="font-size:9px;color:var(--t3);font-family:var(--mono);">⚠ Credential harvesting page detected</div>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:10px;font-family:var(--mono);color:var(--text-dim);margin-bottom:6px;">REDIRECT CHAIN</div>
+        <div style="font-size:11px;font-family:var(--mono);color:#6b7fa3;line-height:2;">
+          <div style="color:var(--accent)">paypa1-secure[.]com/login</div>
+          <div style="padding-left:12px;">↓ 302 Redirect</div>
+          <div style="color:var(--t2)">cdn-assets[.]xyz/r?id=44f</div>
+          <div style="padding-left:12px;">↓ 302 Redirect</div>
+          <div style="color:var(--t3)">185.220.101.47/harvest.php</div>
+          <div style="font-size:10px;color:var(--t3);margin-top:4px;">Form POST → exfil[.]ru/c</div>
+        </div>
+      </div>
+    </div>
+    </div>
+  </div>
+
+  <div class="escalate-box">
+    <h5>⬆ When to Escalate to Tier 3</h5>
+    <p>Escalate if: the form action sends credentials to a third-party domain suggesting an organized infrastructure, multiple redirectors are being used (indicating kit-based phishing), or the page is mimicking an internal corporate tool (suggesting targeted insider-threat scenarios). At this point, Maltego is used to map the full infrastructure.</p>
+  </div>
+</div>
+
+<!-- ═══════════════════ TIER 3 ═══════════════════ -->
+<div class="tier-divider t3"></div>
+<div class="section-header" style="max-width:1060px;margin:0 auto;padding-top:40px;">
+  <div class="tier-label">
+    <div class="tier-num t3">03</div>
+    <div class="tier-title-block">
+      <h2>TIER 3 — THREAT ACTOR &amp; CAMPAIGN MAPPING</h2>
+      <p>ATTRIBUTION &amp; INTELLIGENCE · PERFORMED BY L3 ANALYST / THREAT INTEL TEAM</p>
+    </div>
+  </div>
+</div>
+<p class="section-intro" style="padding:12px 48px 24px;max-width:1060px;margin:0 auto;color:var(--text-dim);font-size:14px;">
+  Tier 3 shifts the mission from "is this bad?" to "who is doing this, how broadly, and what do we do about it?" This is where you connect individual IOCs into an interconnected threat picture — mapping infrastructure, identifying campaign patterns, and producing intelligence that can protect your entire organization and be shared with the wider security community.
+</p>
+
+<!-- ── TOOL: Maltego ── -->
+<div class="tool-section" style="max-width:1060px;margin:0 auto;">
+  <div class="tool-header">
+    <div class="tool-name-block">
+      <h3>🕸 Maltego CE — Infrastructure Graph Intelligence</h3>
+      <a class="tool-url" href="https://www.maltego.com/maltego-community/" target="_blank">maltego.com/maltego-community</a>
+      <div class="tool-meta">
+        <span class="badge badge-t3">TIER 3</span>
+        <span class="badge badge-neutral">FREE COMMUNITY EDITION</span>
+      </div>
+    </div>
+  </div>
+  <p class="tool-desc">
+    Maltego is a visual link-analysis platform that transforms a single IOC — an IP address, domain, or email — into a full relationship graph by querying dozens of data sources simultaneously. The Community Edition (CE) is free and supports the core transforms needed for phishing campaign mapping. Unlike the previous tools, Maltego requires a <strong>free account registration</strong> and desktop installation (~150MB).
+  </p>
+
+  <div class="steps">
+    <div class="step"><div class="step-num">1</div><p>Install Maltego CE from the official site, create a free account, and launch the application. Select <code>New Graph</code> and drag an <strong>IP Address</strong> entity onto the canvas.</p></div>
+    <div class="step"><div class="step-num">2</div><p>Enter the malicious IP from your Tier 1 investigation. Right-click the node and run <code>All Transforms → To DNS Name</code> to discover all domains hosted on that IP.</p></div>
+    <div class="step"><div class="step-num">3</div><p>From any discovered domain, run <code>To WHOIS — Registrant Email</code>. If the threat actor reused an email across registrations, this exposes their entire portfolio of malicious domains.</p></div>
+    <div class="step"><div class="step-num">4</div><p>Run <code>To IP Address [DNS]</code> from each domain, then <code>To Netblock [Owner]</code> to identify the hosting ASN (Autonomous System Number) — which hosting provider is sheltering this infrastructure.</p></div>
+    <div class="step"><div class="step-num">5</div><p>Export the graph as a PNG or CSV for your incident report. Highlight nodes in red that represent confirmed malicious infrastructure.</p></div>
+  </div>
+
+  <!-- Mock screenshot: Maltego graph -->
+  <div class="mock-screen">
+    <div class="mock-bar">
+      <div class="mock-dot r"></div><div class="mock-dot y"></div><div class="mock-dot g"></div>
+      <div class="mock-url" style="font-family:var(--sans);font-size:11px;">Maltego CE — Graph: paypa1-secure_campaign.graphml</div>
+    </div>
+    <div class="mock-body" style="padding:12px 16px;">
+      <div class="maltego-canvas" id="maltego-canvas">
+        <!-- Center node -->
+        <div class="m-node center" style="top:90px;left:200px;">
+          <span class="icon">🌐</span> 185.220.101.47
+        </div>
+        <!-- Domains -->
+        <div class="m-node danger" style="top:20px;left:380px;">
+          <span class="icon">🔗</span> paypa1-secure.com
+        </div>
+        <div class="m-node danger" style="top:70px;left:400px;">
+          <span class="icon">🔗</span> secure-paypa1.net
+        </div>
+        <div class="m-node danger" style="top:130px;left:390px;">
+          <span class="icon">🔗</span> amaz0n-login.xyz
+        </div>
+        <!-- Registrant -->
+        <div class="m-node warn" style="top:10px;left:580px;">
+          <span class="icon">✉</span> reg@privateemail.ru
+        </div>
+        <!-- Related IP -->
+        <div class="m-node danger" style="top:170px;left:200px;">
+          <span class="icon">🌐</span> 91.108.4.77
+        </div>
+        <!-- ASN -->
+        <div class="m-node" style="top:195px;left:30px;">
+          <span class="icon">🏢</span> AS12389 · Rostelecom
+        </div>
+        <!-- Exfil -->
+        <div class="m-node danger" style="top:50px;left:590px;">
+          <span class="icon">📤</span> exfil.ru/collect
+        </div>
+        <!-- Lines drawn with CSS — approximate positions -->
+        <svg style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;" xmlns="http://www.w3.org/2000/svg">
+          <!-- center to domains -->
+          <line x1="280" y1="105" x2="380" y2="40" stroke="#ff475780" stroke-width="1"/>
+          <line x1="280" y1="105" x2="400" y2="87" stroke="#ff475780" stroke-width="1"/>
+          <line x1="280" y1="105" x2="390" y2="148" stroke="#ff475780" stroke-width="1"/>
+          <!-- domains to registrant -->
+          <line x1="530" y1="40" x2="580" y2="30" stroke="#ffa50280" stroke-width="1"/>
+          <line x1="550" y1="87" x2="580" y2="35" stroke="#ffa50280" stroke-width="1.5" stroke-dasharray="4,2"/>
+          <!-- center to related IP -->
+          <line x1="240" y1="120" x2="240" y2="187" stroke="#ff475780" stroke-width="1.5"/>
+          <!-- center to ASN -->
+          <line x1="200" y1="110" x2="120" y2="207" stroke="#2a3a5c" stroke-width="1"/>
+          <!-- domain to exfil -->
+          <line x1="545" y1="40" x2="590" y2="65" stroke="#ff475799" stroke-width="1.5"/>
+        </svg>
+      </div>
+      <div class="maltego-legend">
+        <div class="m-leg"><div class="m-leg-dot" style="background:var(--t3)"></div>Malicious Infrastructure</div>
+        <div class="m-leg"><div class="m-leg-dot" style="background:var(--t2)"></div>Registrant / Attribution</div>
+        <div class="m-leg"><div class="m-leg-dot" style="background:#2a3a5c"></div>Hosting ASN</div>
+        <div class="m-leg"><div class="m-leg-dot" style="background:var(--accent)"></div>Pivot Point (Origin IOC)</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tip-box">
+    <strong>💡 Analyst Note</strong>
+    The power of Maltego is in pivoting — starting from one confirmed IOC and discovering the entire ecosystem around it. In the example above, a single IP revealed three phishing domains, a shared registrant email, a second IP, and an exfiltration endpoint. Each of these becomes a new blocking rule and a new search term in your SIEM logs.
+  </div>
+</div>
+
+<!-- ── TOOL: PhishTank / OpenPhish ── -->
+<div class="tool-section" style="max-width:1060px;margin:0 auto;">
+  <div class="tool-header">
+    <div class="tool-name-block">
+      <h3>🎣 PhishTank &amp; OpenPhish — Phishing Campaign Databases</h3>
+      <div style="display:flex;gap:20px;margin-top:4px;">
+        <a class="tool-url" href="https://phishtank.org" target="_blank">phishtank.org</a>
+        <a class="tool-url" href="https://openphish.com" target="_blank">openphish.com</a>
+      </div>
+      <div class="tool-meta">
+        <span class="badge badge-t3">TIER 3</span>
+        <span class="badge badge-neutral">FREE · COMMUNITY-DRIVEN</span>
+      </div>
+    </div>
+  </div>
+  <p class="tool-desc">
+    PhishTank and OpenPhish are crowd-sourced and automated databases of known phishing URLs, updated in real time. At Tier 3, you use these to determine if your discovered URLs are part of a broader, already-documented campaign — and to submit new URLs so others can be protected. Think of them as community threat-sharing platforms.
+  </p>
+
+  <div class="steps">
+    <div class="step"><div class="step-num">1</div><p>On <code>phishtank.org</code>, use the <strong>Check a URL</strong> feature to query any suspicious URL. The result tells you if the URL has been previously verified by community analysts as phishing.</p></div>
+    <div class="step"><div class="step-num">2</div><p>If the URL is <em>not</em> in PhishTank yet but your analysis confirms it's malicious, submit it using <strong>Add a Phish</strong>. This protects every organization using PhishTank as a blocklist feed.</p></div>
+    <div class="step"><div class="step-num">3</div><p>Cross-reference with <code>openphish.com/feed.txt</code> — OpenPhish provides a raw text feed of active phishing URLs that you can ingest into a SIEM or firewall rule as an automated blocklist.</p></div>
+  </div>
+
+  <div class="escalate-box">
+    <h5>⬆ When to Involve External Parties</h5>
+    <p>At Tier 3, escalation changes character. If your analysis confirms a novel, targeted campaign: (1) Report to CISA (cisa.gov/reporting) if you're in critical infrastructure. (2) File with the Anti-Phishing Working Group at <strong>reportphishing@apwg.org</strong>. (3) If a real brand is being spoofed (PayPal, your bank, Microsoft), notify their abuse team — most have dedicated security emails. (4) Preserve all evidence with timestamps for potential legal proceedings.</p>
+  </div>
+</div>
+
+<!-- ═══════════════════ IOC SUMMARY TABLE ═══════════════════ -->
+<div class="tool-section" style="max-width:1060px;margin:0 auto;">
+  <p class="sub-head">Investigation Output</p>
+  <h2 class="section-title">Sample IOC Summary Table</h2>
+  <p style="font-size:13.5px;color:var(--text-dim);margin-bottom:16px;">After completing a tiered investigation, document your findings in a structured IOC table for your incident report, SIEM ingestion, and threat intel sharing. Below is an example output from the walkthrough scenario above.</p>
+
+  <table class="ioc-table">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Indicator</th>
+        <th>Source Tool</th>
+        <th>Context</th>
+        <th>Risk</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>IP Address</td>
+        <td class="mono">185.220.101.47</td>
+        <td>MXToolbox / Headers</td>
+        <td>Originating mail server · 3 blacklist hits · Rostelecom ASN</td>
+        <td><span class="ioc-risk h">HIGH</span></td>
+      </tr>
+      <tr>
+        <td>Domain</td>
+        <td class="mono">paypa1-secure.com</td>
+        <td>MXToolbox / VirusTotal</td>
+        <td>Typosquat of PayPal · Registered 12 days ago · 14/72 VT detections</td>
+        <td><span class="ioc-risk h">HIGH</span></td>
+      </tr>
+      <tr>
+        <td>URL</td>
+        <td class="mono">hxxps://paypa1-secure[.]com/login</td>
+        <td>VirusTotal / URLScan</td>
+        <td>Credential harvesting page · Redirects to 185.220.101.47/steal.php</td>
+        <td><span class="ioc-risk h">HIGH</span></td>
+      </tr>
+      <tr>
+        <td>Domain</td>
+        <td class="mono">secure-paypa1.net</td>
+        <td>Maltego</td>
+        <td>Co-hosted on same IP · Shares registrant email · Campaign infrastructure</td>
+        <td><span class="ioc-risk h">HIGH</span></td>
+      </tr>
+      <tr>
+        <td>Domain</td>
+        <td class="mono">cdn-assets.xyz</td>
+        <td>URLScan redirect chain</td>
+        <td>Intermediary redirector domain · May be compromised legitimate site</td>
+        <td><span class="ioc-risk m">MED</span></td>
+      </tr>
+      <tr>
+        <td>Email</td>
+        <td class="mono">reg@privateemail.ru</td>
+        <td>Maltego WHOIS</td>
+        <td>Registrant email used across 3 malicious domains · Attribution pivot</td>
+        <td><span class="ioc-risk h">HIGH</span></td>
+      </tr>
+      <tr>
+        <td>File Hash</td>
+        <td class="mono">invoice_march2026.pdf</td>
+        <td>VirusTotal</td>
+        <td>SHA256: a3f8c1d...92ee4b · 0/72 detections · Monitor for late detection</td>
+        <td><span class="ioc-risk l">LOW</span></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ═══════════════════ GLOSSARY ═══════════════════ -->
+<div class="glossary-section" style="max-width:1060px;margin:0 auto;">
+  <p class="sub-head">Reference</p>
+  <h2 class="section-title">Key Terms Glossary</h2>
+  <div class="gloss-grid">
+    <div class="gloss-item"><div class="gloss-term">SPF (Sender Policy Framework)</div><div class="gloss-def">A DNS record listing which mail servers are authorized to send email for a domain. A "FAIL" means the sending server isn't on the approved list.</div></div>
+    <div class="gloss-item"><div class="gloss-term">DKIM (DomainKeys Identified Mail)</div><div class="gloss-def">A cryptographic signature in the email header that proves the message wasn't tampered with in transit. A "FAIL" means the signature is invalid or missing.</div></div>
+    <div class="gloss-item"><div class="gloss-term">DMARC</div><div class="gloss-def">A policy that tells receiving servers what to do when SPF or DKIM fails (reject, quarantine, or do nothing). Many organizations leave this unconfigured — a gap attackers exploit.</div></div>
+    <div class="gloss-item"><div class="gloss-term">IOC (Indicator of Compromise)</div><div class="gloss-def">A technical artifact — IP, domain, URL, file hash — that signals malicious activity. IOCs are used to block threats and search for related activity in logs.</div></div>
+    <div class="gloss-item"><div class="gloss-term">Typosquatting</div><div class="gloss-def">Registering a domain that closely resembles a trusted brand — like "paypa1.com" vs "paypal.com" — to deceive inattentive users.</div></div>
+    <div class="gloss-item"><div class="gloss-term">ASN (Autonomous System Number)</div><div class="gloss-def">An identifier for a network operated by a single organization (like an ISP or hosting provider). Malicious actors often cluster on low-cost, permissive ASNs.</div></div>
+    <div class="gloss-item"><div class="gloss-term">C2 (Command and Control)</div><div class="gloss-def">Infrastructure used by attackers to communicate with compromised systems. A malware-infected machine "phones home" to a C2 server to receive instructions.</div></div>
+    <div class="gloss-item"><div class="gloss-term">Spear Phishing</div><div class="gloss-def">A targeted phishing attack aimed at a specific individual or organization, using personalized information to increase credibility. More dangerous than generic phishing.</div></div>
+    <div class="gloss-item"><div class="gloss-term">OSINT (Open Source Intelligence)</div><div class="gloss-def">Intelligence gathered from publicly available sources — DNS records, WHOIS, social media, leaked databases, etc. — without requiring privileged access.</div></div>
+    <div class="gloss-item"><div class="gloss-term">SHA256 Hash</div><div class="gloss-def">A unique 64-character fingerprint of a file. If two files have the same hash, they are identical. Used to identify malware without running it.</div></div>
+    <div class="gloss-item"><div class="gloss-term">SIEM</div><div class="gloss-def">Security Information and Event Management platform — a centralized system that ingests logs and alerts from across an organization for correlation and detection.</div></div>
+    <div class="gloss-item"><div class="gloss-term">Pivot</div><div class="gloss-def">In OSINT, to use one known piece of information (an IP, email, or domain) as a starting point to discover related, previously unknown infrastructure or actors.</div></div>
+  </div>
+</div>
+
+<!-- ═══════════════════ FOOTER ═══════════════════ -->
+<div class="footer" style="max-width:1060px;margin:0 auto;">
+  <div>
+    <span style="color:var(--accent)">// OSINT Phishing Investigation Walkthrough</span><br>
+    Tier 1 → Tier 2 → Tier 3 · Free Tools Only
+  </div>
+  <div style="text-align:right;color:#3a4a6a;">
+    All tool URLs verified as of 2026 · For educational use<br>
+    Always defang IOCs in documentation: hxxps:// and [.] notation
+  </div>
+</div>
+
+</body>
+</html>
